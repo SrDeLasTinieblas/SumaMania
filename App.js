@@ -1,6 +1,16 @@
 // App.js
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Alert, Animated } from 'react-native';
+import { GameResultModal } from './components/GameResultModal';
+
+const LEVEL_CONFIG = {
+  1: { ops: ['+'], numberLimit: 2, time: null, title: 'Suma Simple' },
+  2: { ops: ['+'], numberLimit: 3, time: null, title: 'Suma Triple' },
+  3: { ops: ['+', '-'], numberLimit: 2, time: null, title: 'Suma y Resta' },
+  4: { ops: ['+', '-'], numberLimit: 3, time: 15, title: 'Contrarreloj' },
+  5: { ops: ['+', '-', '*'], numberLimit: 2, time: 15, title: 'Multiplicación' },
+  6: { ops: ['+', '-', '*', '/'], numberLimit: 2, time: 15, title: 'División' },
+};
 
 const Game = () => {
   const [targetNumber, setTargetNumber] = useState(0);
@@ -8,12 +18,64 @@ const Game = () => {
   const [playerScore, setPlayerScore] = useState(0);
   const [aiScore, setAiScore] = useState(0);
   const [selectedNumbers, setSelectedNumbers] = useState([]);
+  const [selectedOp, setSelectedOp] = useState('+');
   const [level, setLevel] = useState(1);
   const [isPlayerTurn, setIsPlayerTurn] = useState(true);
+  const [timeLeft, setTimeLeft] = useState(null);
+  const [showOperations, setShowOperations] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [bestPlay, setBestPlay] = useState(null);
+
+  const borderAnimation = useRef(new Animated.Value(0)).current;
+  const timerRef = useRef(null);
 
   useEffect(() => {
     startNewGame();
-  }, []);
+  }, [level]);
+
+  useEffect(() => {
+    if (timeLeft === 5) {
+      startBorderAnimation();
+    }
+    if (timeLeft === 0) {
+      handleTimeUp();
+    }
+  }, [timeLeft]);
+
+  const startBorderAnimation = () => {
+    Animated.sequence([
+      Animated.timing(borderAnimation, {
+        toValue: 1,
+        duration: 500,
+        useNativeDriver: false,
+      }),
+      Animated.timing(borderAnimation, {
+        toValue: 0,
+        duration: 500,
+        useNativeDriver: false,
+      }),
+    ]).start(() => {
+      if (timeLeft <= 5) {
+        startBorderAnimation();
+      }
+    });
+  };
+
+  const startTimer = () => {
+    if (LEVEL_CONFIG[level].time) {
+      setTimeLeft(LEVEL_CONFIG[level].time);
+      clearInterval(timerRef.current);
+      timerRef.current = setInterval(() => {
+        setTimeLeft(prev => (prev > 0 ? prev - 1 : 0));
+      }, 1000);
+    }
+  };
+
+  const handleTimeUp = () => {
+    clearInterval(timerRef.current);
+    Alert.alert('¡Tiempo agotado!', 'Has perdido el turno');
+    nextTurn();
+  };
 
   const startNewGame = () => {
     const newTarget = Math.floor(Math.random() * 50) + 50;
@@ -23,71 +85,155 @@ const Game = () => {
     setAiScore(0);
     setSelectedNumbers([]);
     setIsPlayerTurn(true);
+    setSelectedOp('+');
+    if (LEVEL_CONFIG[level].time) {
+      startTimer();
+    } else {
+      setTimeLeft(null);
+    }
   };
 
   const generateNewNumbers = () => {
-    // Crear array con números del 0 al 9
     const baseNumbers = Array.from({ length: 10 }, (_, i) => i);
-    
-    // Mezclar el array usando el algoritmo Fisher-Yates
     for (let i = baseNumbers.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [baseNumbers[i], baseNumbers[j]] = [baseNumbers[j], baseNumbers[i]];
     }
-    
     setNumbers(baseNumbers);
   };
 
-  const handleNumberPress = (number, index) => {
-    if (!isPlayerTurn) return;
+  const calculateResult = (nums, operation) => {
+    let result = nums[0];
+    for (let i = 1; i < nums.length; i++) {
+      switch (operation) {
+        case '+':
+          result += nums[i];
+          break;
+        case '-':
+          result -= nums[i];
+          break;
+        case '*':
+          result *= nums[i];
+          break;
+        case '/':
+          if (nums[i] === 0) return Infinity;
+          result /= nums[i];
+          break;
+      }
+    }
+    return result;
+  };
 
-    const numberLimit = level > 2 ? 3 : 2;
-    
-    if (selectedNumbers.length < numberLimit) {
-      setSelectedNumbers([...selectedNumbers, number]);
-      const newNumbers = [...numbers];
-      newNumbers[index] = null;
-      setNumbers(newNumbers);
+  // Añade estas nuevas funciones después de calculateResult
+const findBestCombination = (numbers, target, ops, numberLimit) => {
+  let bestDiff = Infinity;
+  let bestCombination = [];
+  let bestOperation = '+';
+  
+  const findCombinations = (curr, remaining, depth) => {
+    if (depth === numberLimit) {
+      ops.forEach(op => {
+        const result = calculateResult(curr, op);
+        const diff = Math.abs(target - result);
+        if (diff < bestDiff && result <= target) {
+          bestDiff = diff;
+          bestCombination = [...curr];
+          bestOperation = op;
+        }
+      });
+      return;
+    }
 
-      if (selectedNumbers.length === numberLimit - 1) {
-        setTimeout(() => {
-          const sum = [...selectedNumbers, number].reduce((a, b) => a + b, 0);
-          const newScore = playerScore + sum;
-
-          if (newScore > targetNumber) {
-            Alert.alert('¡Perdiste!', 'Te has pasado del número objetivo');
-            startNewGame();
-          } else if (newScore === targetNumber) {
-            Alert.alert('¡Ganaste!', '¡Has alcanzado el número objetivo!');
-            startNewGame();
-          } else {
-            setPlayerScore(newScore);
-            setSelectedNumbers([]);
-            generateNewNumbers();
-            setIsPlayerTurn(false);
-            setTimeout(aiTurn, 1000);
-          }
-        }, 500);
+    for (let i = 0; i < remaining.length; i++) {
+      if (remaining[i] !== null) {
+        const num = remaining[i];
+        const newRemaining = [...remaining];
+        newRemaining[i] = null;
+        findCombinations([...curr, num], newRemaining, depth + 1);
       }
     }
   };
 
+  findCombinations([], numbers, 0);
+  return {
+    numbers: bestCombination,
+    operation: bestOperation,
+    result: calculateResult(bestCombination, bestOperation)
+  };
+};
+
+
+  const nextTurn = () => {
+    clearInterval(timerRef.current);
+    setSelectedNumbers([]);
+    generateNewNumbers(); // Esto regenera los números y los hace interactuables de nuevo
+    setIsPlayerTurn(prev => !prev); // Alterna el turno entre jugador y IA
+    if (LEVEL_CONFIG[level].time) {
+      startTimer();
+    }
+  };
+
+
+
+// Modifica handleNumberPress para incluir el análisis cuando pierde
+const handleNumberPress = (number, index) => {
+  if (!isPlayerTurn) return;
+
+  const numberLimit = LEVEL_CONFIG[level].numberLimit;
+  
+  if (selectedNumbers.length < numberLimit) {
+    setSelectedNumbers([...selectedNumbers, number]);
+    const newNumbers = [...numbers];
+    newNumbers[index] = null;
+    setNumbers(newNumbers);
+
+    if (selectedNumbers.length === numberLimit - 1) {
+      setTimeout(() => {
+        const result = calculateResult([...selectedNumbers, number], selectedOp);
+        const newScore = playerScore + result;
+
+        if (newScore > targetNumber || (selectedOp === '/' && !Number.isInteger(result))) {
+          // Encuentra la mejor jugada posible
+          const best = findBestCombination(
+            numbers,
+            targetNumber - playerScore,
+            LEVEL_CONFIG[level].ops,
+            numberLimit
+          );
+          setBestPlay(best);
+          setShowModal(true);
+        } else if (newScore === targetNumber) {
+          Alert.alert('¡Ganaste!', '¡Has alcanzado el número objetivo!');
+          setLevel(prev => Math.min(prev + 1, Object.keys(LEVEL_CONFIG).length));
+          startNewGame();
+        } else {
+          setPlayerScore(newScore);
+          nextTurn();
+          setTimeout(() => {
+            aiTurn();
+          }, 1000);
+        }
+      }, 500);
+    }
+  }
+};
+  
   const aiTurn = () => {
-    const numberLimit = level > 2 ? 3 : 2;
+    const numberLimit = LEVEL_CONFIG[level].numberLimit;
     const availableNumbers = numbers.filter(n => n !== null);
     const aiSelected = [];
+    const operation = LEVEL_CONFIG[level].ops[Math.floor(Math.random() * LEVEL_CONFIG[level].ops.length)];
     
-    // Estrategia simple de la IA
     for (let i = 0; i < numberLimit; i++) {
       const randomIndex = Math.floor(Math.random() * availableNumbers.length);
       aiSelected.push(availableNumbers[randomIndex]);
       availableNumbers.splice(randomIndex, 1);
     }
 
-    const sum = aiSelected.reduce((a, b) => a + b, 0);
-    const newScore = aiScore + sum;
+    const result = calculateResult(aiSelected, operation);
+    const newScore = aiScore + result;
 
-    if (newScore > targetNumber) {
+    if (newScore > targetNumber || (operation === '/' && !Number.isInteger(result))) {
       Alert.alert('¡Ganaste!', 'La IA se ha pasado del número objetivo');
       startNewGame();
     } else if (newScore === targetNumber) {
@@ -95,27 +241,60 @@ const Game = () => {
       startNewGame();
     } else {
       setAiScore(newScore);
-      generateNewNumbers();
-      setIsPlayerTurn(true);
+      nextTurn();
     }
   };
 
+  const borderColor = borderAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['transparent', '#ff0000'],
+  });
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.targetText}>Objetivo: {targetNumber}</Text>
-      <Text style={styles.levelText}>Nivel: {level}</Text>
+    <Animated.View style={[styles.container, {
+      borderLeftColor: borderColor,
+      borderRightColor: borderColor,
+      borderLeftWidth: 5,
+      borderRightWidth: 5,
+    }]}>
+      <View style={styles.header}>
+        <Text style={styles.targetText}>Objetivo: {targetNumber}</Text>
+        <Text style={styles.levelText}>Nivel {level}: {LEVEL_CONFIG[level].title}</Text>
+        {timeLeft !== null && (
+          <Text style={[styles.timerText, timeLeft <= 5 && styles.timerWarning]}>
+            Tiempo: {timeLeft}s
+          </Text>
+        )}
+      </View>
       
       <View style={styles.scoreContainer}>
         <Text style={styles.scoreText}>Jugador: {playerScore}</Text>
         <Text style={styles.scoreText}>IA: {aiScore}</Text>
       </View>
 
+      {LEVEL_CONFIG[level].ops.length > 1 && (
+        <View style={styles.operationsContainer}>
+          {LEVEL_CONFIG[level].ops.map(op => (
+            <TouchableOpacity
+              key={op}
+              style={[styles.opButton, selectedOp === op && styles.opButtonSelected]}
+              onPress={() => setSelectedOp(op)}
+            >
+              <Text style={styles.opButtonText}>{op}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
       <View style={styles.numbersContainer}>
         {numbers.map((number, index) => (
           number !== null && (
             <TouchableOpacity
               key={index}
-              style={styles.numberButton}
+              style={[
+                styles.numberButton,
+                !isPlayerTurn && styles.numberButtonDisabled
+              ]}
               onPress={() => handleNumberPress(number, index)}
               disabled={!isPlayerTurn}
             >
@@ -132,7 +311,21 @@ const Game = () => {
       <TouchableOpacity style={styles.newGameButton} onPress={startNewGame}>
         <Text style={styles.newGameText}>Nuevo Juego</Text>
       </TouchableOpacity>
-    </View>
+      
+      <GameResultModal
+        visible={showModal}
+          onClose={() => {
+            setShowModal(false);
+            startNewGame();
+          }}
+          isWin={playerScore === targetNumber}
+          score={playerScore}
+          targetNumber={targetNumber}
+          bestPlay={bestPlay}
+        />
+
+
+    </Animated.View>
   );
 };
 
@@ -143,23 +336,65 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f5f5',
     alignItems: 'center',
   },
-  targetText: {
-    fontSize: 24,
-    fontWeight: 'bold',
+  header: {
+    alignItems: 'center',
     marginBottom: 20,
   },
-  levelText: {
-    fontSize: 18,
+  targetText: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#2c3e50',
     marginBottom: 10,
+  },
+  levelText: {
+    fontSize: 20,
+    color: '#34495e',
+    marginBottom: 5,
+  },
+  timerText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#2ecc71',
+  },
+  timerWarning: {
+    color: '#e74c3c',
   },
   scoreContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     width: '100%',
     marginBottom: 20,
+    backgroundColor: '#fff',
+    padding: 15,
+    borderRadius: 10,
+    elevation: 3,
   },
   scoreText: {
-    fontSize: 18,
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+  },
+  operationsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  opButton: {
+    width: 50,
+    height: 50,
+    margin: 5,
+    backgroundColor: '#3498db',
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  opButtonSelected: {
+    backgroundColor: '#2980b9',
+    transform: [{ scale: 1.1 }],
+  },
+  opButtonText: {
+    color: 'white',
+    fontSize: 24,
     fontWeight: 'bold',
   },
   numbersContainer: {
@@ -172,27 +407,36 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     margin: 5,
-    backgroundColor: '#007AFF',
+    backgroundColor: '#3498db',
     borderRadius: 30,
     justifyContent: 'center',
     alignItems: 'center',
+    elevation: 3,
+  },
+  numberButtonDisabled: {
+    backgroundColor: '#bdc3c7',
   },
   numberText: {
     color: 'white',
     fontSize: 24,
+    fontWeight: 'bold',
   },
   turnText: {
-    fontSize: 20,
+    fontSize: 22,
     marginBottom: 20,
+    color: '#2c3e50',
+    fontWeight: '500',
   },
   newGameButton: {
-    backgroundColor: '#34C759',
+    backgroundColor: '#2ecc71',
     padding: 15,
     borderRadius: 10,
+    elevation: 3,
   },
   newGameText: {
     color: 'white',
     fontSize: 18,
+    fontWeight: 'bold',
   },
 });
 
