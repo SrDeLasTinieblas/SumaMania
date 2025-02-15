@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Easing, Platform } from 'react-native';
 import { GameResultModal } from './components/GameResultModal';
 import { MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
 
 const LEVEL_CONFIG = {
-  1: { ops: ['+'], numberLimit: 2, time: null, title: 'Suma Simple', color: '#4CAF50' },
+  1: { ops: ['+'], numberLimit: 2, time: 10, title: 'Suma Simple', color: '#4CAF50' },
   2: { ops: ['+'], numberLimit: 3, time: null, title: 'Suma Triple', color: '#2196F3' },
   3: { ops: ['+', '-'], numberLimit: 2, time: null, title: 'Suma y Resta', color: '#9C27B0' },
   4: { ops: ['+', '-'], numberLimit: 3, time: 15, title: 'Contrarreloj', color: '#FF9800' },
@@ -27,6 +27,7 @@ const Game = () => {
 
   const borderAnimation = useRef(new Animated.Value(0)).current;
   const timerRef = useRef(null);
+  const borderColorAnim = useRef(new Animated.Value(0)).current;
 
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const fadeAnim = useRef(new Animated.Value(1)).current;
@@ -62,45 +63,64 @@ const Game = () => {
   };
 
 
+
   const startBorderAnimation = () => {
-    Animated.sequence([
+    if (timeLeft <= 5) {
+      Animated.sequence([
+        Animated.timing(borderAnimation, {
+          toValue: 1,
+          duration: 500,
+          useNativeDriver: false,
+        }),
+        Animated.timing(borderAnimation, {
+          toValue: 0,
+          duration: 500,
+          useNativeDriver: false,
+        }),
+      ]).start(() => {
+        if (timeLeft <= 5 && timeLeft > 0) {
+          startBorderAnimation();
+        }
+      });
+    } else {
       Animated.timing(borderAnimation, {
         toValue: 1,
         duration: 500,
         useNativeDriver: false,
-      }),
-      Animated.timing(borderAnimation, {
-        toValue: 0,
-        duration: 500,
-        useNativeDriver: false,
-      }),
-    ]).start(() => {
-      if (timeLeft <= 5) {
-        startBorderAnimation();
-      }
-    });
+      }).start();
+    }
   };
 
   const startTimer = () => {
     if (LEVEL_CONFIG[level].time) {
-      setTimeLeft(LEVEL_CONFIG[level].time);
+      const initialTime = LEVEL_CONFIG[level].time;
+      setTimeLeft(initialTime);
       clearInterval(timerRef.current);
+      
+      // Reiniciar la animación
+      progressAnim.setValue(0);
+      
       timerRef.current = setInterval(() => {
-        setTimeLeft(prev => (prev > 0 ? prev - 1 : 0));
+        setTimeLeft(prev => {
+          if (prev <= 1) {
+            clearInterval(timerRef.current);
+            handleTimeUp();
+            progressAnim.setValue(1); // Asegurar que la barra llegue al final
+            return 0;
+          }
+          return prev - 1;
+        });
       }, 1000);
     }
   };
-
+  
   const handleTimeUp = () => {
     clearInterval(timerRef.current);
-    setBestPlay(findBestCombination(
-      numbers,
-      targetNumber - playerScore,
-      LEVEL_CONFIG[level].ops,
-      LEVEL_CONFIG[level].numberLimit
-    ));
     setShowModal(true);
+    setBestPlay(null);
+    setIsPlayerTurn(false);
   };
+  
 
   const startNewGame = () => {
     const newTarget = Math.floor(Math.random() * 50) + 50;
@@ -257,7 +277,7 @@ const Game = () => {
 
   const progressWidth = progressAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: ['0%', '100%'],
+    outputRange: ['0%', '100%'], 
   });
 
   const aiTurn = () => {
@@ -288,17 +308,38 @@ const Game = () => {
     }
   };
 
-  const borderColor = borderAnimation.interpolate({
+  const borderOpacity = timeLeft <= 5 
+    ? borderAnimation.interpolate({
+        inputRange: [0, 1],
+        outputRange: [0.3, 1],
+      })
+    : 1;
+
+  const borderColor = borderColorAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: ['transparent', '#ff0000'],
+    outputRange: ['#2ecc71', '#e74c3c'],
   });
-
-
-
+  
+  useEffect(() => {
+    if (timeLeft !== null) {
+      startBorderAnimation();
+      Animated.timing(borderColorAnim, {
+        toValue: timeLeft <= 5 ? 1 : 0,
+        duration: 300,
+        useNativeDriver: false,
+      }).start();
+    }
+  }, [timeLeft]);
+  
   return (
     <View style={styles.container}>
       {/* Header Section */}
-      <View style={styles.headerCard}>
+      <Animated.View style={[styles.headerCard, 
+      { borderColor,
+        borderWidth: 3,
+        opacity: borderOpacity
+      }]}>
+
         <View style={styles.levelBadge}>
           <MaterialIcons name="emoji-events" size={24} color={LEVEL_CONFIG[level].color} />
           <Text style={[styles.levelText, { color: LEVEL_CONFIG[level].color }]}>
@@ -326,13 +367,17 @@ const Game = () => {
                 styles.progressBar, 
                 { 
                   width: progressWidth, 
-                  backgroundColor: timeLeft <= 5 ? '#e74c3c' : '#2ecc71' 
+                  backgroundColor: timeLeft <= 5 ? '#e74c3c' : '#2ecc71',
+                  position: 'absolute',
+                  bottom: 0,
+                  left: 0,
+                  height: 3,
                 }
               ]} 
             />
           </View>
         )}
-      </View>
+      </Animated.View>
 
       {/* Score Section */}
       <View style={styles.scoreBoard}>
