@@ -22,7 +22,6 @@ const Game = () => {
   const [level, setLevel] = useState(1);
   const [isPlayerTurn, setIsPlayerTurn] = useState(true);
   const [timeLeft, setTimeLeft] = useState(null);
-  const [showOperations, setShowOperations] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [bestPlay, setBestPlay] = useState(null);
 
@@ -73,8 +72,13 @@ const Game = () => {
 
   const handleTimeUp = () => {
     clearInterval(timerRef.current);
-    Alert.alert('¡Tiempo agotado!', 'Has perdido el turno');
-    nextTurn();
+    setBestPlay(findBestCombination(
+      numbers,
+      targetNumber - playerScore,
+      LEVEL_CONFIG[level].ops,
+      LEVEL_CONFIG[level].numberLimit
+    ));
+    setShowModal(true);
   };
 
   const startNewGame = () => {
@@ -124,99 +128,99 @@ const Game = () => {
     return result;
   };
 
-  // Añade estas nuevas funciones después de calculateResult
-const findBestCombination = (numbers, target, ops, numberLimit) => {
-  let bestDiff = Infinity;
-  let bestCombination = [];
-  let bestOperation = '+';
+  const findBestCombination = (numbers, target, ops, numberLimit) => {
+    let bestDiff = Infinity;
+    let bestCombination = [];
+    let bestOperation = null;
   
-  const findCombinations = (curr, remaining, depth) => {
-    if (depth === numberLimit) {
-      ops.forEach(op => {
-        const result = calculateResult(curr, op);
-        const diff = Math.abs(target - result);
-        if (diff < bestDiff && result <= target) {
-          bestDiff = diff;
-          bestCombination = [...curr];
-          bestOperation = op;
-        }
+    const permute = (arr, size) => {
+      if (size === 1) return arr.map(num => [num]);
+      const permutations = [];
+      arr.forEach((num, i) => {
+        const remaining = arr.slice(0, i).concat(arr.slice(i + 1));
+        permute(remaining, size - 1).forEach(subPerm => {
+          permutations.push([num, ...subPerm]);
+        });
       });
-      return;
-    }
-
-    for (let i = 0; i < remaining.length; i++) {
-      if (remaining[i] !== null) {
-        const num = remaining[i];
-        const newRemaining = [...remaining];
-        newRemaining[i] = null;
-        findCombinations([...curr, num], newRemaining, depth + 1);
+      return permutations;
+    };
+  
+    const generateCombinations = (nums, depth = 0) => {
+      if (depth === numberLimit) return;
+      for (let i = 1; i <= numberLimit; i++) {
+        const subsets = permute(nums, i);
+        subsets.forEach(subset => {
+          ops.forEach(op => {
+            const result = calculateResult(subset, op);
+            const diff = Math.abs(target - result);
+            if (diff < bestDiff && result <= target) {
+              bestDiff = diff;
+              bestCombination = subset;
+              bestOperation = op;
+            }
+          });
+        });
       }
-    }
+    };
+  
+    generateCombinations(numbers);
+    
+    return {
+      numbers: bestCombination,
+      operation: bestOperation,
+      result: calculateResult(bestCombination, bestOperation),
+    };
   };
-
-  findCombinations([], numbers, 0);
-  return {
-    numbers: bestCombination,
-    operation: bestOperation,
-    result: calculateResult(bestCombination, bestOperation)
-  };
-};
-
 
   const nextTurn = () => {
     clearInterval(timerRef.current);
     setSelectedNumbers([]);
-    generateNewNumbers(); // Esto regenera los números y los hace interactuables de nuevo
-    setIsPlayerTurn(prev => !prev); // Alterna el turno entre jugador y IA
+    generateNewNumbers();
+    setIsPlayerTurn(prev => !prev);
     if (LEVEL_CONFIG[level].time) {
       startTimer();
     }
   };
 
+  const handleNumberPress = (number, index) => {
+    if (!isPlayerTurn) return;
 
+    const numberLimit = LEVEL_CONFIG[level].numberLimit;
+    
+    if (selectedNumbers.length < numberLimit) {
+      setSelectedNumbers([...selectedNumbers, number]);
+      const newNumbers = [...numbers];
+      newNumbers[index] = null;
+      setNumbers(newNumbers);
 
-// Modifica handleNumberPress para incluir el análisis cuando pierde
-const handleNumberPress = (number, index) => {
-  if (!isPlayerTurn) return;
+      if (selectedNumbers.length === numberLimit - 1) {
+        setTimeout(() => {
+          const result = calculateResult([...selectedNumbers, number], selectedOp);
+          const newScore = playerScore + result;
 
-  const numberLimit = LEVEL_CONFIG[level].numberLimit;
-  
-  if (selectedNumbers.length < numberLimit) {
-    setSelectedNumbers([...selectedNumbers, number]);
-    const newNumbers = [...numbers];
-    newNumbers[index] = null;
-    setNumbers(newNumbers);
-
-    if (selectedNumbers.length === numberLimit - 1) {
-      setTimeout(() => {
-        const result = calculateResult([...selectedNumbers, number], selectedOp);
-        const newScore = playerScore + result;
-
-        if (newScore > targetNumber || (selectedOp === '/' && !Number.isInteger(result))) {
-          // Encuentra la mejor jugada posible
-          const best = findBestCombination(
-            numbers,
-            targetNumber - playerScore,
-            LEVEL_CONFIG[level].ops,
-            numberLimit
-          );
-          setBestPlay(best);
-          setShowModal(true);
-        } else if (newScore === targetNumber) {
-          Alert.alert('¡Ganaste!', '¡Has alcanzado el número objetivo!');
-          setLevel(prev => Math.min(prev + 1, Object.keys(LEVEL_CONFIG).length));
-          startNewGame();
-        } else {
-          setPlayerScore(newScore);
-          nextTurn();
-          setTimeout(() => {
-            aiTurn();
-          }, 1000);
-        }
-      }, 500);
+          if (newScore > targetNumber || (selectedOp === '/' && !Number.isInteger(result))) {
+            const best = findBestCombination(
+              numbers,
+              targetNumber - playerScore,
+              LEVEL_CONFIG[level].ops,
+              numberLimit
+            );
+            setBestPlay(best);
+            setShowModal(true);
+          } else if (newScore === targetNumber) {
+            setPlayerScore(newScore);
+            setShowModal(true);
+          } else {
+            setPlayerScore(newScore);
+            nextTurn();
+            setTimeout(() => {
+              aiTurn();
+            }, 1000);
+          }
+        }, 500);
+      }
     }
-  }
-};
+  };
   
   const aiTurn = () => {
     const numberLimit = LEVEL_CONFIG[level].numberLimit;
@@ -229,16 +233,17 @@ const handleNumberPress = (number, index) => {
       aiSelected.push(availableNumbers[randomIndex]);
       availableNumbers.splice(randomIndex, 1);
     }
-
+  
     const result = calculateResult(aiSelected, operation);
     const newScore = aiScore + result;
-
+  
     if (newScore > targetNumber || (operation === '/' && !Number.isInteger(result))) {
-      Alert.alert('¡Ganaste!', 'La IA se ha pasado del número objetivo');
-      startNewGame();
+      setAiScore(newScore);
+      setShowModal(true);
     } else if (newScore === targetNumber) {
-      Alert.alert('¡Perdiste!', 'La IA ha alcanzado el número objetivo');
-      startNewGame();
+      setAiScore(newScore);
+      setBestPlay(null);
+      setShowModal(true);
     } else {
       setAiScore(newScore);
       nextTurn();
@@ -314,15 +319,19 @@ const handleNumberPress = (number, index) => {
       
       <GameResultModal
         visible={showModal}
-          onClose={() => {
-            setShowModal(false);
-            startNewGame();
-          }}
-          isWin={playerScore === targetNumber}
-          score={playerScore}
-          targetNumber={targetNumber}
-          bestPlay={bestPlay}
-        />
+        onClose={() => {
+          setShowModal(false);
+          if (playerScore === targetNumber) {
+            setLevel(prev => Math.min(prev + 1, Object.keys(LEVEL_CONFIG).length));
+          }
+          startNewGame();
+        }}
+        isWin={playerScore === targetNumber}
+        score={playerScore}
+        targetNumber={targetNumber}
+        bestPlay={bestPlay}
+        level={level}
+      />
 
 
     </Animated.View>
@@ -441,3 +450,4 @@ const styles = StyleSheet.create({
 });
 
 export default Game;
+
