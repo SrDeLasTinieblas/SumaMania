@@ -153,43 +153,55 @@ const Game = () => {
     let bestDiff = Infinity;
     let bestCombination = [];
     let bestOperation = null;
-  
-    const permute = (arr, size) => {
-      if (size === 1) return arr.map(num => [num]);
-      const permutations = [];
-      arr.forEach((num, i) => {
-        const remaining = arr.slice(0, i).concat(arr.slice(i + 1));
-        permute(remaining, size - 1).forEach(subPerm => {
-          permutations.push([num, ...subPerm]);
-        });
-      });
-      return permutations;
+
+    if (!numbers.includes(0)) {
+        numbers.push(0);
+    }
+
+    const generateCombinations = (arr, size) => {
+        const results = [];
+        const helper = (prefix, remaining) => {
+            if (prefix.length === size) {
+                results.push([...prefix]);
+                return;
+            }
+            for (let i = 0; i < remaining.length; i++) {
+                helper([...prefix, remaining[i]], remaining.slice(i + 1));
+            }
+        };
+        helper([], arr);
+        return results;
     };
-  
-    const generateCombinations = (nums, depth = 0) => {
-      if (depth === numberLimit) return;
-      for (let i = 1; i <= numberLimit; i++) {
-        const subsets = permute(nums, i);
-        subsets.forEach(subset => {
-          ops.forEach(op => {
+
+    const calculateResult = (nums, op) => {
+        return nums.reduce((acc, num, index) => {
+            if (index === 0) return num;
+            if (op === "+") return acc + num;
+            if (op === "-") return acc - num;
+            if (op === "*") return acc * num;
+            if (op === "/" && num !== 0) return acc / num;
+            return acc;
+        }, 0);
+    };
+
+    const subsets = generateCombinations(numbers, numberLimit);
+
+    subsets.forEach(subset => {
+        ops.forEach(op => {
             const result = calculateResult(subset, op);
             const diff = Math.abs(target - result);
             if (diff < bestDiff && result <= target) {
-              bestDiff = diff;
-              bestCombination = subset;
-              bestOperation = op;
+                bestDiff = diff;
+                bestCombination = [...subset];
+                bestOperation = op;
             }
-          });
         });
-      }
-    };
-  
-    generateCombinations(numbers);
-    
+    });
+
     return {
-      numbers: bestCombination,
-      operation: bestOperation,
-      result: calculateResult(bestCombination, bestOperation),
+        numbers: bestCombination,
+        operation: bestOperation,
+        result: calculateResult(bestCombination, bestOperation),
     };
   };
 
