@@ -1,15 +1,15 @@
-// App.js
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Platform } from 'react-native';
 import { GameResultModal } from './components/GameResultModal';
+import { MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
 
 const LEVEL_CONFIG = {
-  1: { ops: ['+'], numberLimit: 2, time: null, title: 'Suma Simple' },
-  2: { ops: ['+'], numberLimit: 3, time: null, title: 'Suma Triple' },
-  3: { ops: ['+', '-'], numberLimit: 2, time: null, title: 'Suma y Resta' },
-  4: { ops: ['+', '-'], numberLimit: 3, time: 15, title: 'Contrarreloj' },
-  5: { ops: ['+', '-', '*'], numberLimit: 2, time: 15, title: 'Multiplicación' },
-  6: { ops: ['+', '-', '*', '/'], numberLimit: 2, time: 15, title: 'División' },
+  1: { ops: ['+'], numberLimit: 2, time: null, title: 'Suma Simple', color: '#4CAF50' },
+  2: { ops: ['+'], numberLimit: 3, time: null, title: 'Suma Triple', color: '#2196F3' },
+  3: { ops: ['+', '-'], numberLimit: 2, time: null, title: 'Suma y Resta', color: '#9C27B0' },
+  4: { ops: ['+', '-'], numberLimit: 3, time: 15, title: 'Contrarreloj', color: '#FF9800' },
+  5: { ops: ['+', '-', '*'], numberLimit: 2, time: 15, title: 'Multiplicación', color: '#E91E63' },
+  6: { ops: ['+', '-', '*', '/'], numberLimit: 2, time: 15, title: 'División', color: '#F44336' },
 };
 
 const Game = () => {
@@ -28,18 +28,39 @@ const Game = () => {
   const borderAnimation = useRef(new Animated.Value(0)).current;
   const timerRef = useRef(null);
 
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const progressAnim = useRef(new Animated.Value(0)).current;
+
   useEffect(() => {
     startNewGame();
   }, [level]);
 
   useEffect(() => {
-    if (timeLeft === 5) {
-      startBorderAnimation();
-    }
-    if (timeLeft === 0) {
-      handleTimeUp();
+    if (LEVEL_CONFIG[level].time) {
+      Animated.timing(progressAnim, {
+        toValue: 1,
+        duration: LEVEL_CONFIG[level].time * 1000,
+        useNativeDriver: false,
+      }).start();
     }
   }, [timeLeft]);
+
+  const animateNumber = () => {
+    Animated.sequence([
+      Animated.timing(scaleAnim, {
+        toValue: 1.2,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 1,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
 
   const startBorderAnimation = () => {
     Animated.sequence([
@@ -184,7 +205,7 @@ const Game = () => {
 
   const handleNumberPress = (number, index) => {
     if (!isPlayerTurn) return;
-
+    animateNumber();
     const numberLimit = LEVEL_CONFIG[level].numberLimit;
     
     if (selectedNumbers.length < numberLimit) {
@@ -221,7 +242,12 @@ const Game = () => {
       }
     }
   };
-  
+
+  const progressWidth = progressAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0%', '100%'],
+  });
+
   const aiTurn = () => {
     const numberLimit = LEVEL_CONFIG[level].numberLimit;
     const availableNumbers = numbers.filter(n => n !== null);
@@ -255,34 +281,72 @@ const Game = () => {
     outputRange: ['transparent', '#ff0000'],
   });
 
+
+
   return (
-    <Animated.View style={[styles.container, {
-      borderLeftColor: borderColor,
-      borderRightColor: borderColor,
-      borderLeftWidth: 5,
-      borderRightWidth: 5,
-    }]}>
-      <View style={styles.header}>
-        <Text style={styles.targetText}>Objetivo: {targetNumber}</Text>
-        <Text style={styles.levelText}>Nivel {level}: {LEVEL_CONFIG[level].title}</Text>
-        {timeLeft !== null && (
-          <Text style={[styles.timerText, timeLeft <= 5 && styles.timerWarning]}>
-            Tiempo: {timeLeft}s
+    <View style={styles.container}>
+      {/* Header Section */}
+      <View style={styles.headerCard}>
+        <View style={styles.levelBadge}>
+          <MaterialIcons name="emoji-events" size={24} color={LEVEL_CONFIG[level].color} />
+          <Text style={[styles.levelText, { color: LEVEL_CONFIG[level].color }]}>
+            Nivel {level}: {LEVEL_CONFIG[level].title}
           </Text>
+        </View>
+        
+        <View style={styles.targetContainer}>
+          <MaterialIcons name="track-changes" size={24} color="#2c3e50" />
+          <Text style={styles.targetText}>{targetNumber}</Text>
+        </View>
+
+        {timeLeft !== null && (
+          <View style={styles.timerContainer}>
+            <MaterialIcons 
+              name="timer" 
+              size={24} 
+              color={timeLeft <= 5 ? '#e74c3c' : '#2ecc71'} 
+            />
+            <Text style={[styles.timerText, timeLeft <= 5 && styles.timerWarning]}>
+              {timeLeft}s
+            </Text>
+            <Animated.View 
+              style={[
+                styles.progressBar, 
+                { 
+                  width: progressWidth, 
+                  backgroundColor: timeLeft <= 5 ? '#e74c3c' : '#2ecc71' 
+                }
+              ]} 
+            />
+          </View>
         )}
       </View>
-      
-      <View style={styles.scoreContainer}>
-        <Text style={styles.scoreText}>Jugador: {playerScore}</Text>
-        <Text style={styles.scoreText}>IA: {aiScore}</Text>
+
+      {/* Score Section */}
+      <View style={styles.scoreBoard}>
+        <View style={[styles.scoreCard, isPlayerTurn && styles.activeScoreCard]}>
+          <FontAwesome5 name="user" size={24} color="#2c3e50" />
+          <Text style={styles.scoreLabel}>Jugador</Text>
+          <Text style={styles.scoreValue}>{playerScore}</Text>
+        </View>
+        <View style={[styles.scoreCard, !isPlayerTurn && styles.activeScoreCard]}>
+          <FontAwesome5 name="robot" size={24} color="#2c3e50" />
+          <Text style={styles.scoreLabel}>IA</Text>
+          <Text style={styles.scoreValue}>{aiScore}</Text>
+        </View>
       </View>
 
+      {/* Operations Section */}
       {LEVEL_CONFIG[level].ops.length > 1 && (
         <View style={styles.operationsContainer}>
           {LEVEL_CONFIG[level].ops.map(op => (
             <TouchableOpacity
               key={op}
-              style={[styles.opButton, selectedOp === op && styles.opButtonSelected]}
+              style={[
+                styles.opButton,
+                selectedOp === op && styles.opButtonSelected,
+                { backgroundColor: LEVEL_CONFIG[level].color }
+              ]}
               onPress={() => setSelectedOp(op)}
             >
               <Text style={styles.opButtonText}>{op}</Text>
@@ -291,14 +355,21 @@ const Game = () => {
         </View>
       )}
 
-      <View style={styles.numbersContainer}>
+      {/* Numbers Grid */}
+      <Animated.View 
+        style={[
+          styles.numbersGrid,
+          { transform: [{ scale: scaleAnim }] }
+        ]}
+      >
         {numbers.map((number, index) => (
           number !== null && (
             <TouchableOpacity
               key={index}
               style={[
                 styles.numberButton,
-                !isPlayerTurn && styles.numberButtonDisabled
+                !isPlayerTurn && styles.numberButtonDisabled,
+                { backgroundColor: LEVEL_CONFIG[level].color }
               ]}
               onPress={() => handleNumberPress(number, index)}
               disabled={!isPlayerTurn}
@@ -307,16 +378,29 @@ const Game = () => {
             </TouchableOpacity>
           )
         ))}
+      </Animated.View>
+
+      {/* Turn Indicator */}
+      <View style={styles.turnIndicator}>
+        <MaterialIcons 
+          name={isPlayerTurn ? "arrow-forward" : "computer"} 
+          size={24} 
+          color={LEVEL_CONFIG[level].color} 
+        />
+        <Text style={[styles.turnText, { color: LEVEL_CONFIG[level].color }]}>
+          {isPlayerTurn ? 'Tu turno' : 'Turno de la IA'}
+        </Text>
       </View>
 
-      <Text style={styles.turnText}>
-        {isPlayerTurn ? 'Tu turno' : 'Turno de la IA'}
-      </Text>
-
-      <TouchableOpacity style={styles.newGameButton} onPress={startNewGame}>
+      {/* New Game Button */}
+      <TouchableOpacity 
+        style={[styles.newGameButton, { backgroundColor: LEVEL_CONFIG[level].color }]}
+        onPress={startNewGame}
+      >
+        <MaterialIcons name="refresh" size={24} color="white" />
         <Text style={styles.newGameText}>Nuevo Juego</Text>
       </TouchableOpacity>
-      
+
       <GameResultModal
         visible={showModal}
         onClose={() => {
@@ -331,57 +415,123 @@ const Game = () => {
         targetNumber={targetNumber}
         bestPlay={bestPlay}
         level={level}
+        levelColor={LEVEL_CONFIG[level].color}
       />
-
-
-    </Animated.View>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    padding: 35,
+    backgroundColor: '#f8f9fa',
+  },
+  headerCard: {
+    backgroundColor: 'white',
+    borderRadius: 15,
     padding: 20,
-    backgroundColor: '#f5f5f5',
-    alignItems: 'center',
-  },
-  header: {
-    alignItems: 'center',
     marginBottom: 20,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+      },
+      android: {
+        elevation: 5,
+      },
+    }),
   },
-  targetText: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#2c3e50',
+  levelBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 10,
   },
   levelText: {
     fontSize: 20,
-    color: '#34495e',
-    marginBottom: 5,
+    fontWeight: 'bold',
+    marginLeft: 10,
+  },
+  targetContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 10,
+  },
+  targetText: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+    marginLeft: 10,
+  },
+  timerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
   },
   timerText: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#2ecc71',
+    marginLeft: 10,
   },
   timerWarning: {
     color: '#e74c3c',
   },
-  scoreContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    width: '100%',
-    marginBottom: 20,
-    backgroundColor: '#fff',
-    padding: 15,
-    borderRadius: 10,
-    elevation: 3,
+  progressBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    height: 3,
+    backgroundColor: '#2ecc71',
   },
-  scoreText: {
-    fontSize: 20,
+  scoreBoard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  scoreCard: {
+    flex: 1,
+    backgroundColor: 'white',
+    margin: 5,
+    padding: 15,
+    borderRadius: 15,
+    alignItems: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2,
+        shadowRadius: 2.84,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
+  },
+  activeScoreCard: {
+    transform: [{ scale: 1.05 }],
+    ...Platform.select({
+      ios: {
+        shadowOpacity: 0.3,
+      },
+      android: {
+        elevation: 5,
+      },
+    }),
+  },
+  scoreLabel: {
+    fontSize: 16,
+    color: '#666',
+    marginTop: 5,
+  },
+  scoreValue: {
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#2c3e50',
+    marginTop: 5,
   },
   operationsContainer: {
     flexDirection: 'row',
@@ -392,21 +542,38 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     margin: 5,
-    backgroundColor: '#3498db',
     borderRadius: 25,
     justifyContent: 'center',
     alignItems: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2,
+        shadowRadius: 2.84,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   opButtonSelected: {
-    backgroundColor: '#2980b9',
     transform: [{ scale: 1.1 }],
+    ...Platform.select({
+      ios: {
+        shadowOpacity: 0.3,
+      },
+      android: {
+        elevation: 5,
+      },
+    }),
   },
   opButtonText: {
     color: 'white',
     fontSize: 24,
     fontWeight: 'bold',
   },
-  numbersContainer: {
+  numbersGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
@@ -415,39 +582,65 @@ const styles = StyleSheet.create({
   numberButton: {
     width: 60,
     height: 60,
-    margin: 5,
-    backgroundColor: '#3498db',
+    margin: 8,
     borderRadius: 30,
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 3,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   numberButtonDisabled: {
-    backgroundColor: '#bdc3c7',
+    opacity: 0.5,
   },
   numberText: {
     color: 'white',
     fontSize: 24,
     fontWeight: 'bold',
   },
+  turnIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
   turnText: {
     fontSize: 22,
-    marginBottom: 20,
-    color: '#2c3e50',
     fontWeight: '500',
+    marginLeft: 10,
   },
   newGameButton: {
-    backgroundColor: '#2ecc71',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     padding: 15,
     borderRadius: 10,
-    elevation: 3,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   newGameText: {
     color: 'white',
     fontSize: 18,
     fontWeight: 'bold',
+    marginLeft: 10,
   },
 });
 
 export default Game;
-
