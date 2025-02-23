@@ -39,13 +39,42 @@ const Game = () => {
 
   useEffect(() => {
     if (LEVEL_CONFIG[level].time) {
+      const initialTime = LEVEL_CONFIG[level].time;
+      setTimeLeft(initialTime);
+  
+      // Reiniciar la animación de la barra de progreso
+      progressAnim.setValue(0);
       Animated.timing(progressAnim, {
         toValue: 1,
-        duration: LEVEL_CONFIG[level].time * 1000,
+        duration: initialTime * 1000,
         useNativeDriver: false,
       }).start();
+  
+      // Limpiar el temporizador anterior si existe
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+  
+      // Iniciar el nuevo temporizador
+      timerRef.current = setInterval(() => {
+        setTimeLeft((prev) => {
+          if (prev <= 1) {
+            clearInterval(timerRef.current);
+            handleTimeUp();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
     }
-  }, [timeLeft]);
+  
+    // Limpiar el temporizador al desmontar el componente
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
+  }, [level]); // Dependencia: level
 
   const animateNumber = () => {
     Animated.sequence([
@@ -96,16 +125,20 @@ const Game = () => {
       const initialTime = LEVEL_CONFIG[level].time;
       setTimeLeft(initialTime);
       clearInterval(timerRef.current);
-      
-      // Reiniciar la animación
+  
+      // Reiniciar la animación de la barra de progreso
       progressAnim.setValue(0);
-      
+      Animated.timing(progressAnim, {
+        toValue: 1,
+        duration: initialTime * 1000,
+        useNativeDriver: false,
+      }).start();
+  
       timerRef.current = setInterval(() => {
         setTimeLeft(prev => {
           if (prev <= 1) {
             clearInterval(timerRef.current);
             handleTimeUp();
-            progressAnim.setValue(1); // Asegurar que la barra llegue al final
             return 0;
           }
           return prev - 1;
@@ -120,7 +153,6 @@ const Game = () => {
     setBestPlay(null);
     setIsPlayerTurn(false);
   };
-  
 
   const startNewGame = () => {
     const newTarget = Math.floor(Math.random() * 50) + 50;
@@ -137,6 +169,7 @@ const Game = () => {
       setTimeLeft(null);
     }
   };
+  
 
   const generateNewNumbers = () => {
     const baseNumbers = Array.from({ length: 10 }, (_, i) => i);
@@ -482,6 +515,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 35,
+    top: 50,
     backgroundColor: '#f8f9fa',
   },
   headerCard: {
