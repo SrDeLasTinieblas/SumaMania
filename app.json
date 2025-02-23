@@ -2,13 +2,13 @@
   "expo": {
     "name": "SumaMania",
     "slug": "SumaMania",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/icon_app.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/icon_app.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -17,12 +17,19 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/icon_app.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "package": "com.tinieblas.SumaMania"
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "f175f3df-44d1-494e-8b14-eac99b3004a9"
+      }
+    },
+    "owner": "tinieblas"
   }
 }
