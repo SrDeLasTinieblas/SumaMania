@@ -530,8 +530,8 @@ const Game = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 35,
-    top: 35,
+    justifyContent: 'center', // Centra verticalmente
+    padding: 20,
     backgroundColor: '#f8f9fa',
   },
   headerCard: {
