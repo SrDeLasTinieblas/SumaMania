@@ -28,6 +28,7 @@ const Game = () => {
   const borderAnimation = useRef(new Animated.Value(0)).current;
   const timerRef = useRef(null);
   const borderColorAnim = useRef(new Animated.Value(0)).current;
+  const borderAnimationRef = useRef(null); // Referencia para la animación de parpadeo
 
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const fadeAnim = useRef(new Animated.Value(1)).current;
@@ -94,7 +95,13 @@ const Game = () => {
 
 
   const startBorderAnimation = () => {
-    if (timeLeft <= 5) {
+    // Detener la animación anterior si existe
+    if (borderAnimationRef.current) {
+      borderAnimationRef.current.stop();
+    }
+
+    // Iniciar una nueva animación de parpadeo
+    borderAnimationRef.current = Animated.loop(
       Animated.sequence([
         Animated.timing(borderAnimation, {
           toValue: 1,
@@ -106,19 +113,24 @@ const Game = () => {
           duration: 500,
           useNativeDriver: false,
         }),
-      ]).start(() => {
-        if (timeLeft <= 5 && timeLeft > 0) {
-          startBorderAnimation();
-        }
-      });
-    } else {
-      Animated.timing(borderAnimation, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: false,
-      }).start();
-    }
+      ])
+    );
+
+    borderAnimationRef.current.start();
   };
+
+  useEffect(() => {
+    if (timeLeft !== null && timeLeft <= 5) {
+      startBorderAnimation();
+    } else {
+      // Detener la animación de parpadeo si el tiempo es mayor a 5 segundos
+      if (borderAnimationRef.current) {
+        borderAnimationRef.current.stop();
+        borderAnimation.setValue(0); // Reiniciar el valor de la animación
+      }
+    }
+  }, [timeLeft]);
+
 
   const startTimer = () => {
     if (LEVEL_CONFIG[level].time) {
@@ -149,9 +161,11 @@ const Game = () => {
   
   const handleTimeUp = () => {
     clearInterval(timerRef.current);
-    setShowModal(true);
-    setBestPlay(null);
-    setIsPlayerTurn(false);
+    if (!showModal) { // Solo mostrar el modal si no hay otro modal visible
+      setShowModal(true);
+      setBestPlay(null);
+      setIsPlayerTurn(false);
+    }
   };
 
   const startNewGame = () => {
@@ -163,12 +177,14 @@ const Game = () => {
     setSelectedNumbers([]);
     setIsPlayerTurn(true);
     setSelectedOp('+');
+    setBestPlay(null); // Reiniciar la mejor jugada
     if (LEVEL_CONFIG[level].time) {
       startTimer();
     } else {
       setTimeLeft(null);
     }
   };
+
   
 
   const generateNewNumbers = () => {
@@ -515,7 +531,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 35,
-    top: 50,
+    top: 35,
     backgroundColor: '#f8f9fa',
   },
   headerCard: {
